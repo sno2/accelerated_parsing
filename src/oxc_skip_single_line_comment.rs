@@ -194,12 +194,6 @@ pub unsafe fn skip_single_line_comment_simd_shuffle(string: &[u8]) -> usize {
         let lo_translated = _mm_shuffle_epi8(lo_nibbles_lookup, lo_nibbles);
         let hi_translated = _mm_shuffle_epi8(hi_nibbles_lookup, hi_nibbles);
 
-        // Previous:
-        // let result = _mm_andnot_si128(
-        //     _mm_cmpeq_epi8(_mm_and_si128(lo_translated, hi_translated), zero),
-        //     full,
-        // );
-
         // Because all of the tag bits are < 128, adding 127 will set the 7th
         // bit for creating the mask for all non-zero elements.
         let result = _mm_add_epi8(_mm_and_si128(lo_translated, hi_translated), magic_add);
