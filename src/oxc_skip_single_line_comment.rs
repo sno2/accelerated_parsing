@@ -1,17 +1,18 @@
 use std::arch::x86_64::{
-    _mm256_and_si256, _mm256_andnot_si256, _mm256_cmpeq_epi8, _mm256_load_si256,
-    _mm256_loadu_si256, _mm256_movemask_epi8, _mm256_or_si256, _mm256_set1_epi8,
-    _mm256_setzero_si256, _mm256_shuffle_epi8, _mm256_srli_epi16, _mm_and_si128, _mm_andnot_si128,
-    _mm_cmpeq_epi8, _mm_load_si128, _mm_loadu_si128, _mm_movemask_epi8, _mm_or_si128,
-    _mm_set1_epi8, _mm_setzero_si128, _mm_shuffle_epi8, _mm_srli_epi16,
+    _mm256_add_epi8, _mm256_and_si256, _mm256_cmpeq_epi8, _mm256_load_si256, _mm256_loadu_si256,
+    _mm256_movemask_epi8, _mm256_or_si256, _mm256_set1_epi8, _mm256_shuffle_epi8,
+    _mm256_srli_epi16, _mm_add_epi8, _mm_and_si128, _mm_cmpeq_epi8, _mm_load_si128,
+    _mm_loadu_si128, _mm_movemask_epi8, _mm_or_si128, _mm_set1_epi8, _mm_shuffle_epi8,
+    _mm_srli_epi16,
 };
 
 pub fn skip_single_line_comment_scalar(string: &[u8]) -> usize {
     for (idx, &byte) in string.iter().enumerate() {
         match byte {
-            0x0A | 0x0D => return idx,
-            0xE2 => match &string[idx + 1..] {
-                &[0x80, 0xA8 | 0xA9, ..] => return idx,
+            LF | CR => return idx,
+            // SAFETY: string must be valid UTF-8.
+            XX => match unsafe { string.get_unchecked(idx + 1..idx + 3) } {
+                &[0x80, 0xA8 | 0xA9] => return idx,
                 _ => {}
             },
             _ => {}
@@ -24,24 +25,31 @@ const LF: u8 = 0x0A;
 const CR: u8 = 0x0D;
 const XX: u8 = 0xE2;
 
-#[rustfmt::skip]
-static SCALAR_LOOKUP: [u8; 256] = {
-    let mut lookup = [0; 256];
-    lookup[LF as usize] = 1;
-    lookup[CR as usize] = 1;
-    lookup[XX as usize] = 2;
+#[derive(Clone, Copy)]
+enum ScalarLookup {
+    Empty,
+    LineEnding,
+    XXByte,
+}
+
+const SCALAR_LOOKUP: [ScalarLookup; 256] = {
+    let mut lookup = [ScalarLookup::Empty; 256];
+    lookup[LF as usize] = ScalarLookup::LineEnding;
+    lookup[CR as usize] = ScalarLookup::LineEnding;
+    lookup[XX as usize] = ScalarLookup::XXByte;
     lookup
 };
 
 pub fn skip_single_line_comment_scalar_lookup(string: &[u8]) -> usize {
     for (idx, &byte) in string.iter().enumerate() {
         match SCALAR_LOOKUP[byte as usize] {
-            1 => return idx,
-            2 => match &string[idx + 1..] {
-                &[0x80, 0xA8 | 0xA9, ..] => return idx,
+            ScalarLookup::Empty => {}
+            ScalarLookup::LineEnding => return idx,
+            // SAFETY: string must be valid UTF-8.
+            ScalarLookup::XXByte => match unsafe { string.get_unchecked(idx + 1..idx + 3) } {
+                &[0x80, 0xA8 | 0xA9] => return idx,
                 _ => {}
             },
-            _ => {}
         }
     }
     string.len()
@@ -50,9 +58,9 @@ pub fn skip_single_line_comment_scalar_lookup(string: &[u8]) -> usize {
 pub fn skip_single_line_comment_memchr(string: &[u8]) -> usize {
     while let Some(idx) = memchr::memchr3(LF, CR, XX, string) {
         match string[idx] {
-            0x0A | 0x0D => return idx,
-            0xE2 => match &string[idx + 1..] {
-                &[0x80, 0xA8 | 0xA9, ..] => return idx,
+            LF | CR => return idx,
+            XX => match unsafe { string.get_unchecked(idx + 1..idx + 3) } {
+                &[0x80, 0xA8 | 0xA9] => return idx,
                 _ => {}
             },
             _ => {}
