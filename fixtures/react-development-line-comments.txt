@@ -1,0 +1,22 @@
+TODO: this is special because it gets imported during build.
+The Symbol used to tag the ReactElement-like types. If there is no native Symbol
+nor polyfill, then a plain number is used for performance.
+Helps identify side effects in begin-phase lifecycle hooks and setState reducers:
+This can be confusing for tests though,
+And it can be bad for performance in production.
+This feature flag can be used to control the behavior:
+replay the begin phase of a failed component inside invokeGuardedCallback.
+TODO: true? Here it might just be false.
+Only used in www builds.
+with their related DOM properties
+Control this behavior with a flag to support 16.6 minor releases in the meanwhile.
+Relying on the `invariant()` implementation lets us
+preserve the format and params in the www builds.
+Avoid an extra prototype jump for these methods.
+an immutable object with a single mutable value
+Note: some APIs are added with feature flags.
+Make sure that stable builds for open source
+don't modify the React object to avoid deopts.
+Also let's not expose their names in stable builds.
+TODO: decide on the top-level export form.
+This is hacky but makes it work with both Rollup and Jest.

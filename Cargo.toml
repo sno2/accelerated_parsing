@@ -1,0 +1,14 @@
+[package]
+name = "accelerated_parsing"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+
+[dependencies]
+memchr = "2.7.1"
+
+[[bench]]
+name = "oxc_skip_single_line_comment"
+harness = false
