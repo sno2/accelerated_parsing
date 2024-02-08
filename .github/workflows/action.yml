@@ -1,0 +1,107 @@
+name: Benchmark
+
+on: workflow_dispatch
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_QUIET: true
+
+jobs:
+  benchmark:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest] # `macos-latest` is too unstable to be useful for benchmark, the variance is always huge.
+    name: Run benchmark on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: benchmark
+
+      - name: Compile
+        run: cargo build --release -p accelerated_parsing
+
+      - name: Run Bench on PR Branch
+        run: cargo benchmark --save-baseline pr
+
+      - name: Checkout Main Branch
+        uses: actions/checkout@v3
+        with:
+          clean: false
+          ref: main
+
+      - name: Install Rust Toolchain
+        uses: ./.github/actions/rustup
+
+      - name: Compile
+        run: cargo build --release -p accelerated_parsing
+
+      - name: Run Bench on Main Branch
+        run: cargo benchmark --save-baseline main
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results-${{ matrix.os }}
+          path: ./target/criterion
+
+      - name: Remove Criterion Artifact
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: ./target/criterion
+
+  benchmark-compare:
+    runs-on: ubuntu-latest
+    name: Compare Benchmarks
+    needs:
+      - benchmark
+
+    steps:
+      - name: Install critcmp
+        uses: taiki-e/install-action@v2
+        with:
+          tool: critcmp
+
+      - name: Linux | Download PR benchmark results
+        uses: actions/download-artifact@v3
+        with:
+          name: benchmark-results-ubuntu-latest
+          path: ./target/criterion
+
+      - name: Linux | Compare benchmark results
+        shell: bash
+        run: |
+          echo "## Benchmark Results" >> summary.md
+          echo "### Linux" >> summary.md
+          echo "\`\`\`" >> summary.md
+          critcmp main pr >> summary.md
+          echo "\`\`\`" >> summary.md
+          echo "" >> summary.md
+
+      - name: Linux | Cleanup benchmark results
+        run: rm -rf ./target/criterion
+
+      - name: Windows | Download PR benchmark results
+        uses: actions/download-artifact@v3
+        with:
+          name: benchmark-results-windows-latest
+          path: ./target/criterion
+
+      - name: Windows | Compare benchmark results
+        shell: bash
+        run: |
+          echo "### Windows" >> summary.md
+          echo "\`\`\`" >> summary.md
+          critcmp main pr >> summary.md
+          echo "\`\`\`" >> summary.md
+          echo "" >> summary.md
+          cat summary.md > $GITHUB_STEP_SUMMARY
