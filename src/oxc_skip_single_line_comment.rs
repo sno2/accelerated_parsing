@@ -181,8 +181,7 @@ pub unsafe fn skip_single_line_comment_simd_shuffle(string: &[u8]) -> usize {
     let lower_nibbles = _mm_set1_epi8(0x0f);
     let lo_nibbles_lookup = _mm_load_si128(LO_NIBBLES_LOOKUP.0.as_ptr() as *const _);
     let hi_nibbles_lookup = _mm_load_si128(HI_NIBBLES_LOOKUP.0.as_ptr() as *const _);
-    let zero = _mm_setzero_si128();
-    let full = _mm_set1_epi8(0xFF as u8 as i8);
+    let magic_add = _mm_set1_epi8(127);
 
     let mut index = 0;
     let mut rest = string;
@@ -195,10 +194,15 @@ pub unsafe fn skip_single_line_comment_simd_shuffle(string: &[u8]) -> usize {
         let lo_translated = _mm_shuffle_epi8(lo_nibbles_lookup, lo_nibbles);
         let hi_translated = _mm_shuffle_epi8(hi_nibbles_lookup, hi_nibbles);
 
-        let result = _mm_andnot_si128(
-            _mm_cmpeq_epi8(_mm_and_si128(lo_translated, hi_translated), zero),
-            full,
-        );
+        // Previous:
+        // let result = _mm_andnot_si128(
+        //     _mm_cmpeq_epi8(_mm_and_si128(lo_translated, hi_translated), zero),
+        //     full,
+        // );
+
+        // Because all of the tag bits are < 128, adding 127 will set the 7th
+        // bit for creating the mask for all non-zero elements.
+        let result = _mm_add_epi8(_mm_and_si128(lo_translated, hi_translated), magic_add);
 
         let mask = _mm_movemask_epi8(result);
 
@@ -244,8 +248,7 @@ pub unsafe fn skip_single_line_comment_wide_simd_shuffle(string: &[u8]) -> usize
     let lower_nibbles = _mm256_set1_epi8(0x0f);
     let lo_nibbles_lookup = _mm256_load_si256(LO_NIBBLES_LOOKUP_WIDE.0.as_ptr() as *const _);
     let hi_nibbles_lookup = _mm256_load_si256(HI_NIBBLES_LOOKUP_WIDE.0.as_ptr() as *const _);
-    let zero = _mm256_setzero_si256();
-    let full = _mm256_set1_epi8(0xFF as u8 as i8);
+    let magic_add = _mm256_set1_epi8(127);
 
     let mut index = 0;
     let mut rest = string;
@@ -260,7 +263,7 @@ pub unsafe fn skip_single_line_comment_wide_simd_shuffle(string: &[u8]) -> usize
 
         let intersection = _mm256_and_si256(lo_translated, hi_translated);
 
-        let result = _mm256_andnot_si256(_mm256_cmpeq_epi8(intersection, zero), full);
+        let result = _mm256_add_epi8(intersection, magic_add);
 
         let mask = _mm256_movemask_epi8(result);
 
